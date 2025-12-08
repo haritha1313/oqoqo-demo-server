@@ -536,6 +536,262 @@ curl -X GET "https://api.acme.io/v1/users?cursor=cur_abc123" \\
   -H "Authorization: Bearer YOUR_API_KEY"
 \`\`\`
 `
+  },
+
+  // Mapping 2: products.ts changes -> adds webhooks and subscription products
+  'src/routes/products.ts': {
+    'docs/getting-started.md': `---
+sidebar_position: 1
+---
+
+# Getting Started
+
+Welcome to the Acme API! This guide will help you get up and running quickly.
+
+## Base URL
+
+All API requests should be made to:
+
+\`\`\`
+https://api.acme.io/v1
+\`\`\`
+
+## Authentication
+
+Include your API key in the Authorization header:
+
+\`\`\`bash
+Authorization: Bearer YOUR_API_KEY
+\`\`\`
+
+You can obtain an API key from your [dashboard](https://dashboard.acme.io/api-keys).
+
+## Endpoints
+
+### Users
+
+Manage user accounts in your application.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | \`/users\` | List all users |
+| POST | \`/users\` | Create a new user |
+| GET | \`/users/:id\` | Get a user by ID |
+
+#### Example: List Users
+
+\`\`\`bash
+curl -X GET https://api.acme.io/v1/users \\
+  -H "Authorization: Bearer YOUR_API_KEY"
+\`\`\`
+
+Response:
+
+\`\`\`json
+{
+  "data": [
+    {
+      "id": "usr_123",
+      "email": "john@example.com",
+      "name": "John Doe",
+      "created_at": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "has_more": false
+}
+\`\`\`
+
+### Products
+
+Manage your product catalog.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | \`/products\` | List all products |
+| POST | \`/products\` | Create a new product |
+| GET | \`/products/:id\` | Get a product by ID |
+| PATCH | \`/products/:id\` | Update a product |
+| DELETE | \`/products/:id\` | Archive a product |
+| POST | \`/products/:id/prices\` | Add a price to product |
+
+#### Product Types
+
+Products can be one of these types:
+- \`one_time\` - Single purchase products
+- \`recurring\` - Subscription products with billing intervals
+
+#### Example: Create Subscription Product
+
+\`\`\`bash
+curl -X POST https://api.acme.io/v1/products \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "name": "Pro Plan",
+    "type": "recurring",
+    "description": "Full access to all features",
+    "metadata": {
+      "features": ["unlimited_users", "priority_support"]
+    }
+  }'
+\`\`\`
+
+#### Example: Add Price to Product
+
+\`\`\`bash
+curl -X POST https://api.acme.io/v1/products/prod_123/prices \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "amount": 9900,
+    "currency": "usd",
+    "interval": "month"
+  }'
+\`\`\`
+
+### Webhooks
+
+Receive real-time notifications about events in your account.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | \`/webhooks\` | List webhook endpoints |
+| POST | \`/webhooks\` | Create a webhook endpoint |
+| DELETE | \`/webhooks/:id\` | Delete a webhook endpoint |
+
+#### Example: Create Webhook
+
+\`\`\`bash
+curl -X POST https://api.acme.io/v1/webhooks \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "url": "https://your-app.com/webhooks",
+    "events": ["product.created", "product.updated"]
+  }'
+\`\`\`
+
+## Next Steps
+
+- Read the [Architecture Overview](./architecture) to understand our system
+- Follow the [How-To Guide](./how-to-guide) for step-by-step tutorials
+`
+  },
+
+  // Mapping 3: index.ts changes -> adds versioning info to architecture
+  'src/index.ts': {
+    'docs/architecture.md': `---
+sidebar_position: 2
+---
+
+# Architecture Overview
+
+The Acme platform is built on a modern microservices architecture designed for scalability and reliability.
+
+## API Versioning
+
+The API uses URL-based versioning. The current version is \`v1\`.
+
+\`\`\`
+https://api.acme.io/v1/...
+https://api.acme.io/v2/...  (coming soon)
+\`\`\`
+
+**Version Lifecycle:**
+- \`v1\` - Current stable version
+- \`v2\` - Beta (breaking changes)
+- Deprecated versions receive 12 months support
+
+## System Components
+
+\`\`\`
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   API       │     │   Auth      │     │   Data      │
+│   Gateway   │────▶│   Service   │────▶│   Service   │
+└─────────────┘     └─────────────┘     └─────────────┘
+      │                    │                   │
+      │                    ▼                   ▼
+      │              ┌─────────────┐    ┌─────────────┐
+      │              │    Redis    │    │  PostgreSQL │
+      │              │   (Cache)   │    │ (Database)  │
+      │              └─────────────┘    └─────────────┘
+      │
+      ▼
+┌─────────────┐
+│   Webhook   │
+│   Service   │
+└─────────────┘
+\`\`\`
+
+## Services
+
+### API Gateway
+
+The API Gateway is the entry point for all client requests. It handles:
+
+- Request routing and versioning
+- Authentication verification
+- Rate limiting (100 req/min per API key)
+- Request/response logging
+
+### Auth Service
+
+The Auth Service manages user authentication and authorization:
+
+- API key validation
+- Session management
+- Permission checks
+- OAuth 2.0 support
+
+### Data Service
+
+The Data Service handles all database operations:
+
+- User CRUD operations
+- Product management
+- Data validation
+- Soft deletes for audit trails
+
+### Webhook Service (New)
+
+The Webhook Service handles outbound event notifications:
+
+- Event queuing and retry logic
+- Signature verification
+- Delivery status tracking
+
+## Data Flow
+
+1. Client sends request to API Gateway
+2. Gateway validates authentication with Auth Service
+3. Gateway checks rate limits against Redis cache
+4. Valid requests are routed to Data Service
+5. Data Service performs database operations
+6. Events trigger Webhook Service notifications
+7. Response flows back through the Gateway
+
+## Technology Stack
+
+| Component | Technology |
+|-----------|------------|
+| API Gateway | Node.js / Express |
+| Auth Service | Node.js / Express |
+| Data Service | Node.js / Express |
+| Webhook Service | Node.js / Bull |
+| Database | PostgreSQL |
+| Cache | Redis |
+| Queue | Redis + Bull |
+
+## Deployment
+
+All services are deployed on AWS using:
+
+- ECS for container orchestration
+- RDS for managed PostgreSQL
+- ElastiCache for Redis
+- CloudWatch for monitoring
+- SNS for alerting
+`
   }
 };
 
