@@ -20,8 +20,22 @@ const DOCS_REPO = process.env.DOCS_REPO || 'oqoqo-demo-docs';
 const PRODUCT_REPO_OWNER = process.env.PRODUCT_REPO_OWNER || 'haritha1313';
 const PRODUCT_REPO = process.env.PRODUCT_REPO || 'oqoqo-demo-product';
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'demo-secret';
+const ADMIN_SECRET = process.env.ADMIN_SECRET || '';
 
 let accessLevel: 'high' | 'medium' = (process.env.AGENT_ACCESS_LEVEL as 'high' | 'medium') || 'medium';
+
+// Auth middleware for protected routes
+function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (!ADMIN_SECRET) {
+    // If no admin secret configured, allow all (for development)
+    return next();
+  }
+  if (!authHeader || authHeader !== `Bearer ${ADMIN_SECRET}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+}
 
 const octokit = new Octokit({ auth: GITHUB_TOKEN });
 
@@ -228,7 +242,7 @@ app.get('/reviews/:id', (req, res) => {
   res.json(review);
 });
 
-app.post('/reviews/:id/approve', async (req, res) => {
+app.post('/reviews/:id/approve', requireAdmin, async (req, res) => {
   const review = pendingReviews.get(parseInt(req.params.id));
   if (!review) {
     return res.status(404).json({ error: 'Review not found' });
@@ -269,7 +283,7 @@ app.post('/reviews/:id/approve', async (req, res) => {
   }
 });
 
-app.post('/reviews/:id/edit', async (req, res) => {
+app.post('/reviews/:id/edit', requireAdmin, async (req, res) => {
   const review = pendingReviews.get(parseInt(req.params.id));
   if (!review) {
     return res.status(404).json({ error: 'Review not found' });
@@ -327,7 +341,7 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
-app.post('/trigger', async (req, res) => {
+app.post('/trigger', requireAdmin, async (req, res) => {
   broadcast({ type: 'DEMO_STARTED' });
 
   try {
@@ -358,7 +372,7 @@ app.post('/trigger', async (req, res) => {
   }
 });
 
-app.post('/reset', async (req, res) => {
+app.post('/reset', requireAdmin, async (req, res) => {
   broadcast({ type: 'RESET_STARTED' });
 
   try {
@@ -405,7 +419,7 @@ app.post('/reset', async (req, res) => {
   }
 });
 
-app.post('/access-level', (req, res) => {
+app.post('/access-level', requireAdmin, (req, res) => {
   const { level } = req.body;
   if (level !== 'high' && level !== 'medium') {
     return res.status(400).json({ error: 'Invalid access level' });
