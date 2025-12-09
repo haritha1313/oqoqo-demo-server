@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
 import { Octokit } from '@octokit/rest';
@@ -12,6 +13,34 @@ const wss = new WebSocketServer({ server });
 
 app.use(cors());
 app.use(express.json());
+
+// Rate limiting
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // 100 requests per window
+  message: { error: 'Too many requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const analysisLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 5, // 5 analysis requests per minute
+  message: { error: 'Too many analysis requests, please wait before trying again.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30, // 30 webhook requests per minute
+  message: { error: 'Too many webhook requests.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply general rate limiter to all routes
+app.use(generalLimiter);
 
 // Environment
 const PORT = process.env.PORT || 3001;
@@ -319,7 +348,7 @@ app.post('/reviews/:id/edit', requireAdmin, async (req, res) => {
   }
 });
 
-app.post('/webhook', async (req, res) => {
+app.post('/webhook', webhookLimiter, async (req, res) => {
   const secret = req.headers['x-webhook-secret'];
   if (secret !== WEBHOOK_SECRET) {
     return res.status(401).json({ error: 'Invalid webhook secret' });
@@ -441,7 +470,7 @@ function sendSSE(res: express.Response, event: string, data: any) {
 }
 
 // GET /analyze/stream - Run documentation gap analysis with SSE streaming
-app.get('/analyze/stream', requireAdmin, async (req, res) => {
+app.get('/analyze/stream', analysisLimiter, requireAdmin, async (req, res) => {
   // Set SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -680,7 +709,7 @@ app.get('/analyze/stream', requireAdmin, async (req, res) => {
 });
 
 // GET /analyze - Run documentation gap analysis (non-streaming fallback)
-app.get('/analyze', requireAdmin, async (req, res) => {
+app.get('/analyze', analysisLimiter, requireAdmin, async (req, res) => {
   broadcast({ type: 'ANALYSIS_STARTED' });
 
   // Simulate analysis delay for realistic UX
